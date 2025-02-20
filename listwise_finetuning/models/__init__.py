@@ -1,0 +1,1 @@
+from qwen_embedding import QwenForSequenceEmbedding
