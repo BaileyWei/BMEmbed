@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 
 from peft import LoraConfig, get_peft_model
 from loss import HardNegativeNLLLoss, ListwiseLoss
-from ..models import QwenForSequenceEmbedding
+from models import QwenForSequenceEmbedding
 logger = get_logger(__name__)
 
 
@@ -330,19 +330,22 @@ def main():
     else:
         loss_fn = HardNegativeNLLLoss()
 
+    name_data = training_args.dataset.split('/')[-1].split('.json')[0]
+    output_dir = f'{training_args.output_dir}/{data_args.dataset_name}/{name_data}'
+
+
     trainer = MySupervisedTrainer(
         model=model,
         args=training_args,
         listwise=custom_args.listwise,
         tokenizer=tokenizer,
         loss_function=loss_fn,
+        output_dir=output_dir
     )
 
     trainer.train()
-
-    output_dir = f'{training_args.output_dir}_{training_args.dataset}'
-    model.model.save_pretrained(training_args.output_dir)
-    tokenizer.save_pretrained(training_args.output_dir)
+    model.model.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
 
 
 if __name__ == "__main__":

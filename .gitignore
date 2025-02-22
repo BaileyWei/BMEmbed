@@ -1,0 +1,14 @@
+*.out
+*.log
+
+venv/
+__pycache__/
+*.pyc
+
+.ipynb_checkpoints/
+
+.env
+.DS_Store  # macOS
+paper_final_picture.ipynb
+id_rsa_github
+id_rsa_github.pub
