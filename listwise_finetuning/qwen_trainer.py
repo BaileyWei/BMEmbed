@@ -72,7 +72,7 @@ class DataTrainingArguments:
         metadata={"help": "The name of the dataset to use. Options: E5"},
     )
     dataset_file_path: Optional[str] = field(
-        default='../data/bm25_trainset.json',
+        default=None,
         metadata={"help": "The input training data file or folder."}
     )
     # TODO: implement this
@@ -104,7 +104,7 @@ class CustomArguments:
     lora_r: int = field(default=8, metadata={"help": "The r value for lora"})
 
     cache_dir: Optional[str] = field(
-        default=None, metadata={"help": "huggingface cache dir"}
+        default='./', metadata={"help": "huggingface cache dir"}
     )
 
     loss_class: Optional[str] = field(
@@ -200,14 +200,15 @@ def main():
             tokenizer.pad_token = tokenizer.unk_token
         else:
             tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = 'left'
 
-    dataset = {'train': json.load(open(data_args.dataset_file_path))}
+    dataset = {'train': json.load(open(f'{data_args.dataset_file_path}/bm25_dataset.json'))}
 
     # Log a few random samples from the training set:
     for index in random.sample(range(len(dataset["train"])), 1):
         logger.info(f"Sample {index} of the training set: {dataset['train'][index]}.")
     # base model
-    model = QwenForSequenceEmbedding(model_args.model_name_or_path)
+    model = QwenForSequenceEmbedding(model_args.model_name_or_path, cache_dir=cache_dir)
     # model.print_trainable_parameters()
 
     # import ipdb;ipdb.set_trace()
@@ -274,6 +275,7 @@ def main():
                 *args,
                 listwise=None,
                 loss_function=None,
+                output_dir=None,
                 **kwargs,
         ) -> None:
             super().__init__(*args, **kwargs)
@@ -286,6 +288,7 @@ def main():
                 batch_size=self._train_batch_size,
                 pin_memory=True,
             )
+            self.output_dir = output_dir
 
         def get_train_dataloader(self):
             return self.accelerator.prepare(self.train_dataloader)
@@ -317,9 +320,8 @@ def main():
 
         def _save(self, output_dir: Optional[str] = None, state_dict=None):
             # If we are executing this function, we are the process zero, so we don't check for that.
-            output_dir = output_dir if output_dir is not None else self.args.output_dir
-            os.makedirs(output_dir, exist_ok=True)
-            logger.info(f"Saving model checkpoint to {output_dir}")
+            os.makedirs(self.output_dir, exist_ok=True)
+            logger.info(f"Saving model checkpoint to {self.output_dir}")
 
             self.model.model.save_pretrained(output_dir)
             self.tokenizer.save_pretrained(output_dir)
@@ -330,8 +332,9 @@ def main():
     else:
         loss_fn = HardNegativeNLLLoss()
 
-    name_data = training_args.dataset.split('/')[-1].split('.json')[0]
-    output_dir = f'{training_args.output_dir}/{data_args.dataset_name}/{name_data}'
+    name_data_file = data_args.dataset_file_path.strip('/').split('/')[-1]
+    method = 'listwise' if custom_args.listwise else 'random'
+    output_dir = f'{training_args.output_dir}/{data_args.dataset_name}/{method}/{name_data_file}_{custom_args.label_scaling}'
 
 
     trainer = MySupervisedTrainer(

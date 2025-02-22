@@ -1,4 +1,6 @@
+import os
 import json
+import datetime
 import random
 import argparse
 from tqdm import tqdm
@@ -6,6 +8,95 @@ from tqdm import tqdm
 from bm25_retrieval import BMScorer
 from partitioning_strategy import generate_intervals
 
+def data_sampler(args):
+    # set seed
+    random.seed(args.seed)
+
+    # read files
+    doc2query = json.load(open(f'../data/sythetic_data/{args.dataset}/doc2query.json'))
+    chunked_corpus = json.load(open(f'../data/sythetic_data/{args.dataset}/chunked_corpus.json'))
+    documents = []
+    for data in chunked_corpus:
+        documents.append(data['chunked_text'])
+
+    print('bm25 model preparing.....')
+    model = BMScorer(documents,
+                     k_1=args.bm25_k1,
+                     b=args.bm25_b)
+
+    print('bm25 model searching.....')
+    for data in tqdm(doc2query):
+        topk_list = model.retrieve(data['query'], topk=args.topk)
+        data['bm25_searching'] = topk_list
+
+    if args.strategy == 'fine-to-coarse':
+        positive_interval = [0, args.first_sample_rank_range]
+        negative_intervals = generate_intervals(start_range=args.first_sample_rank_range,
+                                                end_range=args.topk,
+                                                m=args.m,
+                                                interval_multiplier=args.interval_multiplier)
+    elif args.strategy == 'uniform':
+        positive_interval = [0, args.first_sample_rank_range]
+        negative_intervals = generate_intervals(start_range=args.first_sample_rank_range, end_range=args.topk, m=args.m,
+                                                interval_multiplier=1)
+    else:
+        raise TypeError('stategy should be either fine-to-coarse or uniform')
+
+    args.intervals = positive_interval + negative_intervals
+
+    print(f'start:{positive_interval[0]} end:{positive_interval[1]}')
+    for interval in negative_intervals:
+        print(f'start:{interval[0]} end:{interval[1]}')
+
+    print('bm25 dataset making.....')
+    train_dataset = []
+    for example in tqdm(doc2query):
+        pairs = []
+        num_positive = random.sample([i for i in range(positive_interval[0], positive_interval[1])], args.num_samples)
+        negatives = []
+        for interval_negative in negative_intervals:
+            #         print(interval_positive,interval_negative)
+            num_negative = random.sample([i for i in range(interval_negative[0], interval_negative[1])],
+                                         args.num_samples)
+            negatives.append(num_negative)
+
+        for i in range(len(num_positive)):
+            positive = {
+                'index': example['bm25_searching'][num_positive[i]]['index'],
+                'score': example['bm25_searching'][num_positive[i]]['score'],
+                'text': example['bm25_searching'][num_positive[i]]['text']
+            }
+
+            negative = []
+
+            for num in negatives:
+                negative.append({
+                    'index': example['bm25_searching'][num[i]]['index'],
+                    'score': example['bm25_searching'][num[i]]['score'],
+                    'text': example['bm25_searching'][num[i]]['text']
+                }
+                )
+
+            train_dataset.append({'query': example['query'],
+                                  'positive': positive,
+                                  'negative': negative})
+
+
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
+    dataset_path = f'../data/sythetic_data/{args.dataset}/{timestamp}/'
+    os.makedirs(dataset_path, exist_ok=True)
+    print(f'bm25 dataset volume {len(train_dataset)}')
+
+    print(f'bm25 dataset saving as {dataset_path}/bm25_dataset.json')
+    with open(f'{dataset_path}/bm25_dataset.json', 'w') as file:
+        json.dump(train_dataset, file)
+
+
+    print(f'bm25 dataset sampling config saving as {dataset_path}/sampling_config.json')
+    with open(f'{dataset_path}/sampling_config.json', "w") as f:
+        json.dump(vars(args), f, indent=4)
+
+    # return f'{dataset_path}/bm25_dataset.json'
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -32,75 +123,4 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
-
-    random.seed(args.seed)
-
-    doc2query = json.load(open(f'../data/sythetic_data/{args.dataset}/doc2query.json'))
-    chunked_corpus = json.load(open(f'../data/sythetic_data/{args.dataset}/chunked_corpus.json'))
-    documents = []
-    for data in chunked_corpus:
-        documents.append(data['chunked_text'])
-
-    print('bm25 model preparing.....')
-    model = BMScorer(documents,
-                     k_1=args.bm25_k1,
-                     b=args.bm25_b)
-
-    print('bm25 model searching.....')
-    for data in tqdm(doc2query):
-        topk_list = model.retrieve(data['query'], topk=args.topk)
-        data['bm25_searching'] = topk_list
-
-    if args.strategy == 'fine-to-coarse':
-        positive_interval = [0, args.first_sample_rank_range]
-        negative_intervals = generate_intervals(start_range=args.first_sample_rank_range,
-                                                end_range=args.topk,
-                                                m=args.m,
-                                                interval_multiplier=args.interval_multiplier)
-    elif args.strategy == 'uniform':
-        positive_interval = [0, args.first_sample_rank_range]
-        negative_intervals = generate_intervals(start_range=args.first_sample_rank_range, end_range=args.topk, m=args.m, interval_multiplier=1)
-    else:
-        raise TypeError('stategy should be either fine-to-coarse or uniform')
-
-    print(f'start:{positive_interval[0]} end:{positive_interval[1]}')
-    for interval in negative_intervals:
-        print(f'start:{interval[0]} end:{interval[1]}')
-
-    print('bm25 dataset making.....')
-    train_dataset = []
-    for example in tqdm(doc2query):
-        pairs = []
-        num_positive = random.sample([i for i in range(positive_interval[0], positive_interval[1])], args.num_samples)
-        negatives = []
-        for interval_negative in negative_intervals:
-            #         print(interval_positive,interval_negative)
-            num_negative = random.sample([i for i in range(interval_negative[0], interval_negative[1])], args.num_samples)
-            negatives.append(num_negative)
-
-        for i in range(len(num_positive)):
-            positive = {
-                'index': example['bm25_searching'][num_positive[i]]['index'],
-                'score': example['bm25_searching'][num_positive[i]]['score'],
-                'text': example['bm25_searching'][num_positive[i]]['text']
-            }
-
-            negative = []
-
-            for num in negatives:
-                negative.append({
-                    'index': example['bm25_searching'][num[i]]['index'],
-                    'score': example['bm25_searching'][num[i]]['score'],
-                    'text': example['bm25_searching'][num[i]]['text']
-                }
-                )
-
-            train_dataset.append({'query': example['query'],
-                                  'positive': positive,
-                                  'negative': negative})
-
-    dataset_path = f'../data/sythetic_data/{args.dataset}/bm25_trainset/first_sample_at_top{args.first_sample_rank_range}_seed{args.seed}_m{args.m}_{args.strategy}_multiplier{args.interval_multiplier}_top{args.topk}_num_samples_{args.num_samples}.json'
-    print(f'bm25 dataset volume {len(train_dataset)}')
-    print(f'bm25 dataset saving at {dataset_path}')
-    with open(f'../data/sythetic_data/{args.dataset}/bm25_trainset/first_sample_at_top{args.first_sample_rank_range}_seed{args.seed}_m{args.m}_{args.strategy}_multiplier{args.interval_multiplier}_top{args.topk}_num_samples_{args.num_samples}.json', 'w') as file:
-        json.dump(train_dataset, file)
+    data_sampler(args)
