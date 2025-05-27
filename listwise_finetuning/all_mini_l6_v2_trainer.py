@@ -31,7 +31,7 @@ class ModelArguments:
     """
 
     model_name_or_path: Optional[str] = field(
-        default='/home/yubaiwei/gte-Qwen2-1.5B-instruct',
+        default=None,
         metadata={
             "help": (
                 "The base model checkpoint for weights initialization. Don't set if you want to train a model from scratch."
@@ -72,13 +72,11 @@ class DataTrainingArguments:
     """
 
     dataset_name: Optional[str] = field(
-        # default=None,
-        default='multihop-rag',
+        default=None,
         metadata={"help": "The name of the dataset to use. Options: E5"},
     )
     dataset_file_path: Optional[str] = field(
-        # default=None,
-        default='/home/yubaiwei/projects/experiment-auto-embeddings/data/ablation_study/trainset_sharp_m_9_top_1000.json',
+        default=None,
         metadata={"help": "The input training data file or folder."}
     )
     # TODO: implement this
@@ -110,21 +108,18 @@ class CustomArguments:
     lora_r: int = field(default=8, metadata={"help": "The r value for lora"})
 
     cache_dir: Optional[str] = field(
-        # default='./',
-        default='/home/yubaiwei/',
+        default='./',
         metadata={"help": "huggingface cache dir"}
     )
 
     loss_class: Optional[str] = field(
-        # default="HardNegativeNLLLoss",
-        default="CrossEntropyLoss",
+        default="HardNegativeNLLLoss",
         metadata={
             "help": "The loss class to use for training. Options: HardNegativeNLLLoss, MaxLikelihoodLoss, CrossEntropyLoss"
         },
     )
 
     listwise: Optional[bool] = field(
-        # default=False,
         default=True,
         metadata={
             "help": (
@@ -142,8 +137,7 @@ class CustomArguments:
 @dataclass
 class TrainingArguments(SentenceTransformerTrainingArguments):
     output_dir: Optional[str] = field(
-        # default='../output/',
-        default='/home/yubaiwei/projects/bmembed_model/',
+        default='../output/',
         metadata={
             "help": (
                 " "
