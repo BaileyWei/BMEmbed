@@ -11,3 +11,5 @@ __pycache__/
 .env
 .DS_Store  # macOS
 paper_final_picture.ipynb
+
+*.sh

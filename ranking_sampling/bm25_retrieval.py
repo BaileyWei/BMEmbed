@@ -25,19 +25,32 @@ class BMScorer:
         else:
             raise TypeError('Input must be a list of strings or strings')
 
-    def retrieve(self, query, topk=1000):
-        topk_list = []
+    def retrieve(self, query, topk=None, percentile=None):
+        top_list = []
         tokenized_query = self.tokenize(query)
         scores = self.model.get_scores(tokenized_query)
         sorted_list_with_index = sorted(enumerate(scores), key=lambda x: x[1])
-        for i in sorted_list_with_index[::-1][:topk]:
-            topk_list.append(
-                {'index': i[0],
-                 'score': i[1],
-                 'text': self.documents[i[0]]
-                 }
-            )
-        return topk_list
+        if topk and not percentile:
+            for i in sorted_list_with_index[::-1][:topk]:
+                top_list.append(
+                    {'index': i[0],
+                     'score': i[1],
+                     'text': self.documents[i[0]]
+                     }
+                )
+        elif percentile and not topk:
+            topk = int(percentile * len(self.documents))
+            for i in sorted_list_with_index[::-1][:topk]:
+                top_list.append(
+                    {'index': i[0],
+                     'score': i[1],
+                     'text': self.documents[i[0]]
+                     }
+                )
+        else:
+            raise TypeError('Please define either topk or percentile to retrieval documents')
+
+        return top_list
 
 
 

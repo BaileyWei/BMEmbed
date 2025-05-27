@@ -2,7 +2,7 @@
 
 BMEmbed is an **unsupervised pipeline** for adapting general-purpose text embedding models to **private or proprietary datasets**. It leverages **BM25-based ranking signals** as pseudo-supervision to fine-tune models in a **label-free** manner, making it ideal for **enterprise-specific information retrieval tasks**.
 
-## 📌 Overview of the Pipeline
+## Overview of the Pipeline
 
 The training pipeline consists of three main stages:
 
@@ -22,7 +22,7 @@ The training pipeline consists of three main stages:
 
 ---
 
-## 🔧 Installation
+## Installation
 
 **Requirements:**
 - Python 3.9+
@@ -35,7 +35,7 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-## 🚀 Usage
+## Usage
 
 ### Step 1: Synthetic Query Generation
 
@@ -120,6 +120,7 @@ After training completes, evaluate your model with:
    ```
 ### Repository Structure
 ```
+├── .gitignore
 ├── README.md
 ├── data
 │   ├── evaluation_set
@@ -130,6 +131,8 @@ After training completes, evaluate your model with:
 │           ├── chunked_corpus.json
 │           └── doc2query.json
 ├── listwise_finetuning
+│   ├── accelerate_config.yaml
+│   ├── all_mini_l6_v2_trainer.py
 │   ├── lora.json
 │   ├── loss.py
 │   ├── models
@@ -144,6 +147,7 @@ After training completes, evaluate your model with:
 ├── ranking_sampling
 │   ├── bm25_retrieval.py
 │   ├── data_sampler.py
+│   ├── data_sampler_scores.py
 │   └── partitioning_strategy.py
 ├── requirements.txt
 ├── retrieval_evaluating.py

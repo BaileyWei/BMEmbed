@@ -16,6 +16,10 @@ def data_sampler(args):
     doc2query = json.load(open(f'../data/sythetic_data/{args.dataset}/doc2query.json'))
     chunked_corpus = json.load(open(f'../data/sythetic_data/{args.dataset}/chunked_corpus.json'))
     documents = []
+    if args.num_queries > 0:
+        doc2query = random.sample(doc2query, args.num_queries)
+
+
     for data in chunked_corpus:
         documents.append(data['chunked_text'])
 
@@ -33,12 +37,14 @@ def data_sampler(args):
         positive_interval = [0, args.first_sample_rank_range]
         negative_intervals = generate_intervals(start_range=args.first_sample_rank_range,
                                                 end_range=args.topk,
-                                                m=args.m,
-                                                interval_multiplier=args.interval_multiplier)
+                                                m=args.m-1,
+                                                interval_multiplier=args.interval_multiplier,
+                                                num_samples=args.num_samples)
     elif args.strategy == 'uniform':
         positive_interval = [0, args.first_sample_rank_range]
-        negative_intervals = generate_intervals(start_range=args.first_sample_rank_range, end_range=args.topk, m=args.m,
-                                                interval_multiplier=1)
+        negative_intervals = generate_intervals(start_range=args.first_sample_rank_range, end_range=args.topk, m=args.m-1,
+                                                interval_multiplier=1,
+                                                num_samples=args.num_samples)
     else:
         raise TypeError('stategy should be either fine-to-coarse or uniform')
 
@@ -116,6 +122,8 @@ if __name__ == "__main__":
                         help='Rank range for selecting the first sample, default is 0 to 3')
     parser.add_argument('--num_samples', type=int, default=1,
                         help='Number of times to sample each query')
+    parser.add_argument('--num_queries', type=int, default=-1,
+                        help='sythetic queries volume of the corpus')
     parser.add_argument('--bm25_k1', type=float, default=1.2,
                         help='BM25 parameter k1, controlling term frequency scaling')
     parser.add_argument('--bm25_b', type=float, default=0.75,

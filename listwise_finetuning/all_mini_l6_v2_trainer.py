@@ -1,3 +1,4 @@
+from sentence_transformers import SentenceTransformer, SentenceTransformerTrainer, SentenceTransformerTrainingArguments
 import os
 import json
 import logging
@@ -115,8 +116,8 @@ class CustomArguments:
     )
 
     loss_class: Optional[str] = field(
-        default="HardNegativeNLLLoss",
-        # default="MaxLikelihoodLoss",
+        # default="HardNegativeNLLLoss",
+        default="CrossEntropyLoss",
         metadata={
             "help": "The loss class to use for training. Options: HardNegativeNLLLoss, MaxLikelihoodLoss, CrossEntropyLoss"
         },
@@ -124,7 +125,7 @@ class CustomArguments:
 
     listwise: Optional[bool] = field(
         # default=False,
-        default=False,
+        default=True,
         metadata={
             "help": (
                 "Whether to use listwise training strategy"
@@ -139,10 +140,10 @@ class CustomArguments:
     )
 
 @dataclass
-class TrainingArguments(TrainingArguments):
+class TrainingArguments(SentenceTransformerTrainingArguments):
     output_dir: Optional[str] = field(
         # default='../output/',
-        default=' /home/yubaiwei/projects/bmembed_model/',
+        default='/home/yubaiwei/projects/bmembed_model/',
         metadata={
             "help": (
                 " "
@@ -166,8 +167,17 @@ class TrainingArguments(TrainingArguments):
             )
         },
     )
-    n_gpu: int = field(init=False, repr=False, default=1)
+    n_gpu: int = field(init=False, repr=False, default=4)
 
+    learning_rate: float = field(default=2e-5, metadata={"help": "Linear warmup over warmup_steps."})
+
+    max_steps: int = field(default=1000, metadata={"help": "Linear warmup over warmup_steps."})
+
+    gradient_accumulation_steps: int = field(default=8, metadata={"help": "Linear warmup over warmup_steps."})
+
+    lr_scheduler_type: str = field(default='linear', metadata={"help": "Linear warmup over warmup_steps."})
+
+    save_steps:int =  field(default=500, metadata={"help": "Linear warmup over warmup_steps."})
 
 def main():
     parser = HfArgumentParser(
@@ -178,7 +188,7 @@ def main():
      training_args,
      custom_args) = parser.parse_args_into_dataclasses()
 
-    accelerator = Accelerator(kwargs_handlers=[])
+    accelerator = Accelerator()
     cache_dir = custom_args.cache_dir
     # Make one log on every process with the configuration for debugging.
     logging.basicConfig(
@@ -205,7 +215,7 @@ def main():
     accelerator.wait_for_everyone()
 
     # get the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path,
+    tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2',
                                               cache_dir=cache_dir,
                                               add_eos_token=True)
     if not tokenizer.pad_token:
@@ -213,7 +223,7 @@ def main():
             tokenizer.pad_token = tokenizer.unk_token
         else:
             tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = 'left'
+    # tokenizer.padding_side = 'left'
 
     # dataset = {'train': json.load(open(f'{data_args.dataset_file_path}/bm25_dataset.json'))}
     dataset = {'train': json.load(open(f'{data_args.dataset_file_path}'))}
@@ -222,7 +232,7 @@ def main():
     for index in random.sample(range(len(dataset["train"])), 1):
         logger.info(f"Sample {index} of the training set: {dataset['train'][index]}.")
     # base model
-    model = QwenForSequenceEmbedding(model_args.model_name_or_path, cache_dir=cache_dir)
+    model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
     # model.print_trainable_parameters()
 
     # import ipdb;ipdb.set_trace()
@@ -283,7 +293,7 @@ def main():
         labels = [0]
         return result, labels
 
-    class MySupervisedTrainer(Trainer):
+    class MySupervisedTrainer(SentenceTransformerTrainer):
         def __init__(
                 self,
                 *args,
@@ -313,17 +323,17 @@ def main():
                 inputs: Dict[str, Union[torch.Tensor, Any]],
         ) -> Union[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
             features, labels = inputs
-            q_reps = self.model(**features[0])
-            d_reps = self.model(**features[1])
-            d_reps_neg = self.model(**features[2])
+            q_reps = self.model(features[0])
+            d_reps = self.model(features[1])
+            d_reps_neg = self.model(features[2])
 
             # scores = self.similarity_fct(q_reps, d_reps_neg) * self.scale
             # # Example a[i] should match with b[i]
             # range_labels = torch.arange(0, scores.size(0), device=scores.device)
             # logger.info(d_reps.shape, d_reps_neg.shape)
             if self.listwise:
-                labels = torch.tensor(labels, device=d_reps_neg.device)
-                loss = self.loss_function(q_reps, d_reps, d_reps_neg,
+                labels = torch.tensor(labels, device=d_reps_neg['sentence_embedding'].device)
+                loss = self.loss_function(q_reps['sentence_embedding'], d_reps['sentence_embedding'], d_reps_neg['sentence_embedding'],
                                           labels=labels
                                           )
             else:
@@ -336,9 +346,9 @@ def main():
             # If we are executing this function, we are the process zero, so we don't check for that.
             checkpoint = output_dir.strip('/').split('/')[-1]
 
-            os.makedirs(f'{self.output_dir}/{checkpoint}', exist_ok=True)
+            os.makedirs(f'{self.output_dir}/{checkpoint}'.strip(), exist_ok=True)
             logger.info(f"Saving model checkpoint to {self.output_dir}/{checkpoint}")
-            self.model.model.save_pretrained(f'{self.output_dir}/{checkpoint}')
+            self.model.save_pretrained(f'{self.output_dir}/{checkpoint}')
             self.tokenizer.save_pretrained(f'{self.output_dir}/{checkpoint}')
 
 
@@ -352,7 +362,7 @@ def main():
 
     name_data_file = data_args.dataset_file_path.strip('/').split('/')[-1]
     method = custom_args.loss_class
-    output_dir = f'{training_args.output_dir}/{data_args.dataset_name}/{method}/qwen/{name_data_file}_{custom_args.label_scaling}'
+    output_dir = f'{training_args.output_dir}/{data_args.dataset_name}/{method}/MiniLM/{name_data_file}_{custom_args.label_scaling}'
 
 
     trainer = MySupervisedTrainer(
@@ -371,3 +381,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
