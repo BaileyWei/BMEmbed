@@ -1,3 +1,40 @@
+#!/usr/bin/env python3
+"""
+BM25 Rank-based Sampling for Listwise Training (Paper Version)
+---------------------------------------------------------------
+
+This script implements the BM25 rank-based negative sampling strategy
+used to construct training data for listwise fine-tuning of embedding models.
+It is the version used in all main experiments presented in our paper.
+
+Key Features:
+- Negative candidates are sampled from **predefined rank intervals**
+  in the BM25 retrieval results.
+- Supports two partitioning strategies:
+  - *Fine-to-coarse*: smaller intervals near the top ranks, gradually expanding toward lower ranks.
+  - *Uniform*: evenly spaced rank intervals across the top-k retrieved documents.
+- Positive examples are selected from a fixed top-ranked range (e.g., top-3).
+- Ensures constant total training size by adjusting the number of samples per query
+  based on the query subset size.
+
+Workflow:
+1. Load synthetic queries and chunked corpus.
+2. Run BM25 retrieval over the document collection.
+3. For each query:
+   - Sample one or more positives from top ranks.
+   - Sample negatives from rank-based intervals.
+4. Save the resulting listwise training dataset and full configuration for reproducibility.
+
+This is the exact version used in our main experiments
+
+Example usage:
+    python data_sampler.py  --topk 1000 --interval_multiplier 2 --m 9  --num_queries 3000  --num_samples 2
+
+Author: Yubai Wei
+"""
+
+
+
 import os
 import json
 import datetime

@@ -1,3 +1,41 @@
+"""
+BM25 Score-based Sampling for Listwise Training (Exploratory Version)
+-----------------------------------------------------------------------
+
+This script constructs listwise training data using BM25 score-based supervision.
+Instead of partitioning based on document ranks, it divides the BM25 candidate pool
+into intervals based on **retrieval score distributions** to sample negatives across different relevance bands.
+
+Note:
+This version was **not used in the main experiments reported in the paper**.
+It is intended for exploratory analysis to evaluate whether score-based sampling
+can enhance the model's sensitivity to fine-grained relevance signals.
+
+Key Features:
+- Uses the `--percentile` argument to dynamically define the candidate pool,
+  selecting only the **top-N% documents by BM25 score** for each query.
+  This avoids using a fixed top-k cutoff and adapts to the distribution of retrieval scores.
+- Divides the score range of retrieved candidates into multiple intervals,
+  from which negative examples are sampled.
+- Positive examples are drawn from a fixed top-ranked range (e.g., rank 0–3).
+- Uses `np.searchsorted` to locate score interval boundaries efficiently.
+- Designed to explore semantic signal density rather than rank structure.
+
+Workflow:
+1. Load synthetic queries and chunked document corpus.
+2. Run BM25 retrieval for each query, selecting top documents by percentile.
+3. For each query:
+  - Sample positives from the top ranks.
+  - Sample negatives from predefined **score intervals** over the remaining candidates.
+4. Save the resulting dataset and full sampling configuration.
+
+Example usage:
+    python data_sampler_scores.py --percentile 0.2 --score True --interval_multiplier 0.5
+
+Author: Yubai Wei
+"""
+
+
 import os
 import json
 import datetime
